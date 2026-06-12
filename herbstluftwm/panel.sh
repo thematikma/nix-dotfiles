@@ -125,7 +125,7 @@ hc pad $monitor $panel_height
         # output is checked once a second, but a "date" event is only
         # generated if the output changed compared to the previous run.
         #printf 'date\t^fg(#efefef)%(%H:%M)T^fg(#909090), %(%Y.%m)T.^fg(#efefef)%(%d)T\n'
-        printf "date\t^fg($color_fg_dim)%(%a)T, ^fg($color_fg)%(%d)T.%(%m.%Y)T ^fg($color_fg)%(%H:%M)T\n"
+        printf "date\t^fg($color_fg_dim)%(%a)T, ^fg($color_fg)%(%d)T.%(%m.%Y)T ^fg($color_fg_dim)um: ^fg($color_fg)%(%H:%M)T\n"
         
         # Battery event function from lib/bat.sh
         battery_event
