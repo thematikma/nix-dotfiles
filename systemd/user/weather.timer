@@ -1,0 +1,10 @@
+[Unit]
+Description=Update weather hourly and at login
+
+[Timer]
+OnStartupSec=1
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
