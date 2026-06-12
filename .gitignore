@@ -1,0 +1,14 @@
+.ssh/
+btop/
+BraveSoftware/
+chromium/
+dconf/
+librewolf/
+mozilla/
+pulse/
+unity3d/
+mimeapps.list
+OrcaSlicer/
+PrusaSlicer/
+rclone/
+subtui/credentials.toml

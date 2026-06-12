@@ -1,0 +1,6 @@
+configuration {
+    font: "Helvetica 12";
+    show-icons: true;
+}
+
+@theme "~/.config/rofi/tokyonight.rasi"
