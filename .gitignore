@@ -1,4 +1,3 @@
-!../.local/bin/weather-update.sh
 .ssh/
 btop/
 BraveSoftware/
@@ -13,3 +12,4 @@ OrcaSlicer/
 PrusaSlicer/
 rclone/
 subtui/credentials.toml
+
