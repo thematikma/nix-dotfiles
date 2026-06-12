@@ -258,6 +258,10 @@ hc pad $monitor $panel_height
                 weather_raw="${cmd[@]:1}"
                 weather_format
                 ;;
+                weather_refresh)
+                    weather_read
+                    weather_format
+                    ;;
             quit_panel)
                 exit
                 ;;

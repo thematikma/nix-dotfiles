@@ -3,3 +3,4 @@ Description=Update weather cache
 [Service]
 Type=oneshot
 ExecStart=%h/.local/bin/weather-update.sh
+ExecStartPost=-/usr/bin/herbstclient emit_hook weather_refresh

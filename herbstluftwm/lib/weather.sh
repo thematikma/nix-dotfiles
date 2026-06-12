@@ -9,6 +9,10 @@ weather_event() {
     printf 'wea\t%s\n' "$weather_raw"
 }
 
+weather_read() {
+    weather_raw=$(cat "$weather_cache" 2>/dev/null)
+}
+
 weather_format() {
     if [ -z "$weather_raw" ]; then
         weather=""

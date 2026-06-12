@@ -24,6 +24,9 @@ hc() {
     herbstclient "$@"
 }
 
+# For events based on Systemd --user Units
+systemctl --user import-environment DISPLAY XAUTHORITY
+
 hc emit_hook reload
 
 xsetroot -solid '#5A8E3A'
