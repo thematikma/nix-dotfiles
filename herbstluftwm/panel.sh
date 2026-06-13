@@ -6,6 +6,7 @@ source "$script_dir/lib/bat.sh"
 source "$script_dir/lib/brightness.sh"
 source "$script_dir/lib/media.sh"
 source "$script_dir/lib/weather.sh"
+source "$script_dir/lib/bluetooth.sh"
 
 # variables
 # Tokyo Night theme colors
@@ -115,39 +116,59 @@ hc pad $monitor $panel_height
 
 {
     ### Event generator ###
-    # based on different input data (mpc, date, hlwm hooks, ...) this generates events, formed like this:
-    #   <eventname>\t<data> [...]
-    # e.g.
-    #   date    ^fg(#efefef)18:33^fg(#909090), 2013-10-^fg(#efefef)29
+    pids=()
 
-    #mpc idleloop player &
+    # Date remains on one second cycle
     while true ; do
-        # output is checked once a second, but a "date" event is only
-        # generated if the output changed compared to the previous run.
-        #printf 'date\t^fg(#efefef)%(%H:%M)T^fg(#909090), %(%Y.%m)T.^fg(#efefef)%(%d)T\n'
-        printf "date\t^fg($color_fg_dim)%(%a)T, ^fg($color_fg)%(%d)T.%(%m.%Y)T ^fg($color_fg_dim)um: ^fg($color_fg)%(%H:%M)T\n"
-        
-        # Battery event function from lib/bat.sh
-        battery_event
-
-        # Volume event function from lib/volume.sh
-        volume_event
-        
-        # Brightness event function from lib/brightness.sh
-        brightness_event
-
-        # Meida event function from lib/media.sh
-        media_event
-
-        # Weather event function from lib/weather.sh
-        weather_event
-
+        printf "date\t^fg($color_fg_dim)%(%a)T, ^fg($color_fg)%(%d)T.%(%m.%Y)T ^fg($color_fg)%(%H:%M)T\n"
         sleep 1 || break
     done > >(uniq_linebuffered) &
-    childpid=$!
+    pids+=($!)
+
+    # Initial call, so the bar has actual values at login
+    volume_event
+    brightness_event
+    battery_event
+    weather_event
+    bt_event
+
+    # Media is event based on track change and start/stop/pause
+    playerctl --follow metadata --format $'med\t{{artist}}\x1f{{title}}' 2>/dev/null \
+        > >(uniq_linebuffered) &
+    pids+=($!)
+
+    # Bluetooth – event-based. bluetoothctl stays attached and prints [CHG]
+    # lines; we re-read full state on any Connected/Powered change.
+    # 'echo' keeps stdin open so interactive bluetoothctl does not exit early.
+    { echo; sleep infinity; } | stdbuf -oL bluetoothctl 2>/dev/null \
+        | grep --line-buffered -E 'Connected: (yes|no)|Powered: (yes|no)' \
+        | while read -r _ ; do bt_event ; done > >(uniq_linebuffered) &
+    pids+=($!)
+
+    # PipeWire volume changes that bypass our keybind hooks — e.g. AVRCP from
+    # the headset's own volume buttons, or a default-sink switch on connect.
+    # pw-mon is noisy (fires on track changes too); we filter to volume lines
+    # and let uniq_linebuffered drop unchanged results downstream.
+    stdbuf -oL pw-mon 2>/dev/null \
+        | grep --line-buffered -i 'volume' \
+        | while read -r _ ; do volume_event ; done > >(uniq_linebuffered) &
+    pids+=($!)
+
+    # Time based events for battery and weather
+    # instant updates via *_refresh-hooks
+    while true ; do
+        battery_event
+        weather_event
+        sleep 10 || break
+    done > >(uniq_linebuffered) &
+    pids+=($!)
+
     hc --idle
-    kill $childpid
-} 2> /dev/null | {
+    kill "${pids[@]}" 2>/dev/null
+} 2> /dev/null |
+
+{
+    
     IFS=$'\t' read -ra tags <<< "$(hc tag_status $monitor)"
     visible=true
     date=""
@@ -163,7 +184,7 @@ hc pad $monitor $panel_height
         # This part prints dzen data based on the _previous_ data handling run,
         # and then waits for the next event to happen.
 
-        separator="^bg()^fg($selbg)" ""
+        separator="^bg()^fg($selbg) "
         # draw tags
         for i in "${tags[@]}" ; do
             case ${i:0:1} in
@@ -199,7 +220,7 @@ hc pad $monitor $panel_height
         # echo -n "$separator"
         # echo -n "^bg()^fg() ${windowtitle//^/^^}"
         # small adjustments
-        right="$weather $separator^bg() $media $separator^bg() $brightness $separator^bg() $volume $separator^bg() $battery $separator^bg() $date $separator"
+        right="$weather $separator^bg() $media $separator^bg() $brightness $separator^bg() $volume $separator^bg() $bluetooth $separator^bg() $battery $separator^bg() $date $separator"
         right_text_only=$(echo -n "$right" | sed 's.\^[^(]*([^)]*)..g')
         # get width of right aligned text.. and add some space..
         width=$($textwidth "$font" "$right_text_only    ")
@@ -238,18 +259,18 @@ hc pad $monitor $panel_height
                 vol_muted="${cmd[2]}"
                 volume_format
                 ;;
-                volume_refresh)
-                    volume_read
-                    volume_format
-                    ;;
+            volume_refresh)
+                volume_read
+                volume_format
+                ;;
             bri)
                 act_bri="${cmd[1]}"
                 brightness_format
                 ;;
-                brightness_refresh)
-                    brightness_read
-                    brightness_format
-                    ;;
+            brightness_refresh)
+                brightness_read
+                brightness_format
+                ;;
             med)
                 playing="${cmd[@]:1}"
                 media_format
@@ -257,6 +278,19 @@ hc pad $monitor $panel_height
             wea)
                 weather_raw="${cmd[@]:1}"
                 weather_format
+                ;;
+            weather_refresh)
+                weather_read
+                weather_format
+                ;;
+            blt)
+                bt_power="${cmd[1]}"
+                bt_dev="${cmd[@]:2}"
+                bt_format
+                ;;
+            bt_refresh)
+                bt_read
+                bt_format
                 ;;
             quit_panel)
                 exit

@@ -39,6 +39,6 @@ volume_format() {
     if [ "$vol_muted" = "yes" ]; then
         volume="${ca_open}^fg($color_fg_dim)vol: M ${vol_pct}%^fg()${ca_close}"
     else
-        volume="${ca_open}^fg($color_fg_dim)vol: ^fg()^fg(color_fg)${vol_pct}%^fg()${ca_close}"
+        volume="${ca_open}^fg($color_fg_dim)vol: ^fg()^fg($color_fg)${vol_pct}%^fg()${ca_close}"
     fi
 }
