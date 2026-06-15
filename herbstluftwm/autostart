@@ -167,17 +167,17 @@ hc set frame_bg_transparent on
 hc set frame_transparent_width 0
 hc set frame_gap 4
 
-hc attr theme.title_height 0
+hc attr theme.title_height 20
 hc attr theme.title_when always
-herbstclient attr theme.title_font '-adobe-helvetica-medium-r-normal--14-100-100-100-p-76-iso8859-1'
+hc attr theme.title_font '-adobe-helvetica-medium-r-normal--14-100-100-100-p-76-iso8859-1'
 hc attr theme.title_depth 3
-hc attr theme.active.color "${color_cyan}ef"
+hc attr theme.active.color "${color_bg_light}ef"
 hc attr theme.title_color "$color_fg"
 hc attr theme.normal.color "${color_bg_light}dd"
-hc attr theme.urgent.color "${color_red}dd"
+hc attr theme.urgent.color "${color_fg}dd"
 hc attr theme.tab_color "${color_bg}dd"
 hc attr theme.active.tab_color "${color_bg_light}dd"
-hc attr theme.active.tab_outer_color "${color_blue}dd"
+hc attr theme.active.tab_outer_color "${color_fg}dd"
 hc attr theme.active.tab_title_color "$color_fg"
 hc attr theme.normal.title_color "$color_fg_dim"
 hc attr theme.inner_width 3
