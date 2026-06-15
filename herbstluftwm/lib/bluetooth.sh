@@ -13,9 +13,9 @@
 # bt_format  : builds the dzen string incl. ^ca() for left/right click.
 #
 # Expects from panel.sh: $hc_quoted, $color_fg, $color_fg_dim.
-
 # Reads power status (bt_power = on|off) and the name of the first connected
-# device (bt_dev, may be empty). Only sets variables, prints nothing.
+# device (bt_dev, may be empty). Only sets variables, prints nothing
+
 bt_read() {
     if bluetoothctl show 2>/dev/null | grep -q "Powered: yes"; then
         bt_power="on"

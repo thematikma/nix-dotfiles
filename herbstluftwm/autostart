@@ -8,15 +8,6 @@ color_bg="#1a1b26"
 color_bg_light="#24283b"
 color_fg="#ffffff"
 color_fg_dim="#565f89"
-color_blue="#6dade3"
-color_sandy="#e3a36d"
-color_cyan="#0db9d7"
-color_green="#9ece6a"
-color_teal="#63b7b7"
-color_magenta="#9a6ace"
-color_red="#d72b0d" #"0db9d7"
-color_lavendar="#ad8ee6"
-color_mint="#c7e68e"
 color_black="#15161e"
 
 
@@ -41,6 +32,7 @@ hc keybind $Mod-q close
 hc keybind $Mod-Shift-r reload
 hc keybind $Mod-Shift-q quit
 hc keybind $Mod-Return spawn "${TERMINAL:-alacritty}" # use your $TERMINAL with xterm as fallback
+hc keybind $Mod-n spawn nvim
 hc keybind $Mod-d spawn rofi -show drun
 
 # basic movement in tiling and floating mode
@@ -157,10 +149,10 @@ hc keybind $Mod-s spawn sh -c 'maim -s | xclip -selection clipboard -t image/png
 # hc theme
 hc attr theme.tiling.reset 1
 hc attr theme.floating.reset 1
-hc set frame_border_active_color "${color_cyan}cc"
+hc set frame_border_active_color "${color_fg}cc"
 hc set frame_border_normal_color "${color_bg}cc"
 hc set frame_bg_normal_color "${color_bg_light}aa"
-hc set frame_bg_active_color "${color_cyan}aa"
+hc set frame_bg_active_color "${color_fg}aa"
 hc set frame_border_width 1
 hc set show_frame_decorations 'focused_if_multiple'
 hc set frame_bg_transparent on
@@ -171,13 +163,13 @@ hc attr theme.title_height 0
 hc attr theme.title_when always
 herbstclient attr theme.title_font '-adobe-helvetica-medium-r-normal--14-100-100-100-p-76-iso8859-1'
 hc attr theme.title_depth 3
-hc attr theme.active.color "${color_cyan}ef"
-hc attr theme.title_color "$color_fg"
+hc attr theme.active.color "${color_fg}ef"
+hc attr theme.title_color "$color_fg_dim"
 hc attr theme.normal.color "${color_bg_light}dd"
 hc attr theme.urgent.color "${color_red}dd"
 hc attr theme.tab_color "${color_bg}dd"
 hc attr theme.active.tab_color "${color_bg_light}dd"
-hc attr theme.active.tab_outer_color "${color_blue}dd"
+hc attr theme.active.tab_outer_color "${color_bg}dd"
 hc attr theme.active.tab_title_color "$color_fg"
 hc attr theme.normal.title_color "$color_fg_dim"
 hc attr theme.inner_width 3
@@ -186,8 +178,8 @@ hc attr theme.border_width 3
 hc attr theme.floating.border_width 4
 hc attr theme.floating.outer_width 1
 hc attr theme.floating.outer_color "$color_black"
-hc attr theme.active.inner_color "$color_magenta"
-hc attr theme.urgent.inner_color "$color_red"
+hc attr theme.active.inner_color "$color_fg"
+hc attr theme.urgent.inner_color "$color_fg"
 hc attr theme.normal.inner_color "$color_fg_dim"
 # copy inner color to outer_color
 for state in active urgent normal ; do
