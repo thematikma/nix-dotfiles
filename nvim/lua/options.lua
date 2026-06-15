@@ -32,3 +32,12 @@ vim.opt.incsearch = true            -- search as characters are entered
 vim.opt.hlsearch = true             -- do not highlight matches
 vim.opt.ignorecase = true           -- ignore case in searches by default
 vim.opt.smartcase = true            -- but make it case sensitive if an uppercase is entered
+
+-- Handle dynamic window title
+vim.opt.title = true
+vim.api.nvim_create_autocmd({ "BufEnter", "DirChanged" }, {
+  callback = function()
+    vim.opt.titlestring = vim.fn.getcwd() .. "/" .. vim.fn.expand("%:t")
+  end,
+})
+
