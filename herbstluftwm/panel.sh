@@ -7,6 +7,7 @@ source "$script_dir/lib/brightness.sh"
 source "$script_dir/lib/media.sh"
 source "$script_dir/lib/weather.sh"
 source "$script_dir/lib/bluetooth.sh"
+source "$script_dir/lib/event_generator.sh"
 
 # variables
 # Tokyo Night theme colors
@@ -59,20 +60,7 @@ selbg=$(hc get window_border_active_color|sed 's,^\(\#[0-9a-f]\{6\}\)[0-9a-f]\{2
 selfg='#101010'
 
 ####
-# Battery configuration.
-# Auto-detect the first battery under /sys/class/power_supply.
-# Override by setting BATTERY=BAT1 (etc.) in the environment if needed.
-if [ -z "$BATTERY" ]; then
-    for _bat in /sys/class/power_supply/BAT*; do
-        if [ -d "$_bat" ]; then
-            BATTERY=$(basename "$_bat")
-            break
-        fi
-    done
-fi
-bat_path="/sys/class/power_supply/${BATTERY}"
 
-####
 # Try to find textwidth binary.
 # In e.g. Ubuntu, this is named dzen2-textwidth.
 if which textwidth &> /dev/null ; then
@@ -116,56 +104,11 @@ hc pad $monitor $panel_height
 
 {
     ### Event generator ###
-    pids=()
+    # Was outsourced to /lib/event_generator.sh, to de-clutter this file
+    #
+    event_generator
 
-    # Date remains on one second cycle
-    while true ; do
-        printf "date\t^fg($color_fg_dim)%(%a)T, ^fg($color_fg)%(%d)T.%(%m.%Y)T ^fg($color_fg)%(%H:%M)T\n"
-        sleep 1 || break
-    done > >(uniq_linebuffered) &
-    pids+=($!)
-
-    # Initial call, so the bar has actual values at login
-    volume_event
-    brightness_event
-    battery_event
-    weather_event
-    bt_event
-
-    # Media is event based on track change and start/stop/pause
-    playerctl --follow metadata --format $'med\t{{artist}}\x1f{{title}}' 2>/dev/null \
-        > >(uniq_linebuffered) &
-    pids+=($!)
-
-    # Bluetooth – event-based. bluetoothctl stays attached and prints [CHG]
-    # lines; we re-read full state on any Connected/Powered change.
-    # 'echo' keeps stdin open so interactive bluetoothctl does not exit early.
-    { echo; sleep infinity; } | stdbuf -oL bluetoothctl 2>/dev/null \
-        | grep --line-buffered -E 'Connected: (yes|no)|Powered: (yes|no)' \
-        | while read -r _ ; do bt_event ; done > >(uniq_linebuffered) &
-    pids+=($!)
-
-    # PipeWire volume changes that bypass our keybind hooks — e.g. AVRCP from
-    # the headset's own volume buttons, or a default-sink switch on connect.
-    # pw-mon is noisy (fires on track changes too); we filter to volume lines
-    # and let uniq_linebuffered drop unchanged results downstream.
-    stdbuf -oL pw-mon 2>/dev/null \
-        | grep --line-buffered -i 'volume' \
-        | while read -r _ ; do volume_event ; done > >(uniq_linebuffered) &
-    pids+=($!)
-
-    # Time based events for battery and weather
-    # instant updates via *_refresh-hooks
-    while true ; do
-        battery_event
-        weather_event
-        sleep 10 || break
-    done > >(uniq_linebuffered) &
-    pids+=($!)
-
-    hc --idle
-    kill "${pids[@]}" 2>/dev/null
-} 2> /dev/null |
+    } 2> /dev/null |
 
 {
     

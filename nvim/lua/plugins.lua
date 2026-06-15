@@ -47,6 +47,7 @@ require("lazy").setup({
             keymap = {
                 -- Each keymap may be a list of commands and/or functions
                 preset = "enter",
+                ["<Esc>"] = {"hide", "fallback"},
                 -- Select completions
                 ["<Up>"] = { "select_prev", "fallback" },
                 ["<Down>"] = { "select_next", "fallback" },

@@ -10,7 +10,7 @@ weather_event() {
 }
 
 weather_read() {
-    weather_raw=$(cat "$weather_cache" 2>/dev/null)
+    weather_raw=$(<"$HOME/.cache/weather_cache.file")
 }
 
 weather_format() {

@@ -1,19 +1,30 @@
 #!/usr/bin/env bash
 
-# lib/bat.sh - Batterie Logik für das Panel
+# lib/bat.sh - panel battery logics
+
+# Battery configuration.
+#
+# Auto-detect the first battery under /sys/class/power_supply.
+# Override by setting BATTERY=BAT1 (etc.) in the environment if needed.
+if [ -z "$BATTERY" ]; then
+	for _bat in /sys/class/power_supply/BAT*; do
+	    if [ -d "$_bat" ]; then
+	        BATTERY=$(basename "$_bat")
+	        break
+	    fi
+	done
+fi
+BAT="/sys/class/power_supply/${BATTERY}"
 
 # Event generation
-
 battery_event() {
     # battery: emit "bat <capacity> <status>" only if a battery exists.
     # uniq_linebuffered below suppresses repeats, so this only redraws
     # when the percentage or charging state actually changes.
-
-    if [ -n "$BATTERY" ] && [ -r "$bat_path/capacity" ]; then
-            bat_cap=$(cat "$bat_path/capacity" 2>/dev/null)
-            bat_status=$(cat "$bat_path/status" 2>/dev/null)
-            printf 'bat\t%s\t%s\n' "$bat_cap" "$bat_status"
-    fi
+    [ -n "$BATTERY" ] && [ -r "$BAT/capacity" ] || return
+    bat_cap=$(<"$BAT/capacity")
+    bat_status=$(<"$BAT/status")
+    printf 'bat\t%s\t%s\n' "$bat_cap" "$bat_status"
 }
 
 # Read and render status

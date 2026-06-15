@@ -19,6 +19,8 @@ hc emit_hook reload
 
 xsetroot -solid '#5A8E3A'
 
+# hc must be able to reach X-Server
+systemctl --user import-environment DISPLAY XAUTHORITY
 # remove all existing keybindings
 hc keyunbind --all
 
@@ -163,13 +165,13 @@ hc attr theme.title_height 15
 hc attr theme.title_when always
 herbstclient attr theme.title_font '-adobe-helvetica-medium-r-normal--14-100-100-100-p-76-iso8859-1'
 hc attr theme.title_depth 3
-hc attr theme.active.color "${color_fg}ef"
+hc attr theme.active.color "${color_fg}"
 hc attr theme.title_color "$color_fg_dim"
-hc attr theme.normal.color "${color_bg_light}dd"
-hc attr theme.urgent.color "${color_red}dd"
-hc attr theme.tab_color "${color_bg}dd"
-hc attr theme.active.tab_color "${color_bg_light}dd"
-hc attr theme.active.tab_outer_color "${color_bg}dd"
+hc attr theme.normal.color "${color_bg_light}"
+hc attr theme.urgent.color "${color_red}"
+hc attr theme.tab_color "${color_bg}"
+hc attr theme.active.tab_color "${color_bg_light}"
+hc attr theme.active.tab_outer_color "${color_bg}"
 hc attr theme.active.tab_title_color "$color_fg"
 hc attr theme.normal.title_color "$color_fg_dim"
 hc attr theme.inner_width 3
