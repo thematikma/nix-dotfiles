@@ -2,20 +2,23 @@
 
 A modular status panel for herbstluftwm built on dzen2. Each information source
 (volume, brightness, battery, media, weather, bluetooth) lives in its own
-library under `lib/` and is sourced by `panel.sh`.
+library under `lib/` and is sourced by `panel.sh`. The panel is fully
+event-driven: every source that can push events runs as a persistent listener,
+and the only periodic timer left is the clock.
 
 ## Architecture
 
 The panel consists of two parts connected by a pipe:
 
-1. **Event generator**: produces lines of the form `<event>\t<data...>`. Sources
-   that can push their own events run as persistent listeners; only what truly
-   needs polling runs in a timed loop.
+1. **Event generator** (`lib/event_generator.sh`): produces lines of the form
+   `<event>\t<data...>`. Sources that can push their own events run as
+   persistent listeners; the clock is the only timed loop. The generator is
+   factored into its own `event_generator` function, called from `panel.sh`.
 2. **Data handling / output**: reads the event lines, updates the matching
    display variable through the source's `*_format` function, and prints the
    finished dzen line.
 
-Each library typically provides three functions:
+Each library typically provides:
 
 - `*_event`   : reads the current value and prints an event line (for the
   generator, e.g. as the initial value at startup).
@@ -32,87 +35,39 @@ Each library typically provides three functions:
 | Bluetooth   | `bluetoothctl` listener                  | event on connect/powered change |
 | Volume      | herbstclient hook + `pw-mon` listener    | hook on keybind/click, pw-mon on external change |
 | Brightness  | herbstclient hook                        | hook on keybind/click |
-| Battery     | timed loop, 10 s                         | cyclic (sysfs provides no events) |
-| Weather     | timed loop, 10 s (reads cache file)      | cyclic; cache filled hourly by a systemd timer |
+| Battery     | `upower --monitor` listener              | event on charge/state/AC change |
+| Weather     | systemd path unit -> herbstclient hook   | event when the cache file changes |
 
-## What changed compared to the original setup
+## Design notes and the path to fully event-driven
 
-### 1. Away from the central one-second polling loop
+The original panel queried all sources once per second from a single loop,
+spawning roughly a dozen external processes every second. Over time each source
+was moved to the most appropriate mechanism. The main gain is responsiveness and
+a clean, uniform architecture rather than measurable CPU or RAM savings; the one
+real efficiency point is fewer timer wakeups on battery.
 
-Originally a single loop queried *all* sources once per second, spawning roughly
-a dozen external processes every second (wpctl, playerctl, brightnessctl, cat,
-and so on). This was split up:
+### Date
 
-- The **date display** is the only thing left in a one-second loop. It is now
-  fully fork-free (`printf '%(...)T'` and the `sleep` builtin), so it costs
-  practically no process spawns.
-- Sources with their own push mechanism run as persistent listeners (see below).
-- Only **battery** is still actively polled (every 10 s), because sysfs provides
-  no usable events.
+The only remaining timed loop (1 s). It is fork-free (`printf '%(...)T'` and the
+`sleep` builtin), so it costs practically no process spawns.
 
-A note on the benefit: the main gain is not CPU or RAM (the difference is not
-measurable in practice), but responsiveness and a clean architecture. Sources
-that can deliver events are treated as events.
-
-### 2. Media is event-based instead of polled
+### Media
 
 `playerctl --follow metadata --format` stays open and emits a line only on a
-track or status change. The `med\t` prefix is embedded directly in the format
-string, which removes the detour through `media_event` (the function in
-`lib/media.sh` is no longer called).
+track or status change. The `med\t` prefix is embedded in the format string,
+which removes the detour through `media_event`.
 
-### 3. Weather decoupled via a cache file
+### Bluetooth
 
-The weather data comes from a cache file that a systemd timer fills hourly.
-The timer and service are defined in the NixOS configuration as a **system**
-unit running as the user, with a small updater script that fetches from wttr.in
-and writes the result to the cache:
-
-```nix
-systemd.timers."get-weather" = {
-  wantedBy = [ "timers.target" ];
-  timerConfig = {
-    OnCalendar = "hourly";
-    Persistent = true;
-    Unit = "get-weather.service";
-  };
-};
-systemd.services."get-weather" = {
-  path = [ pkgs.curl ];
-  script = ''
-    ${pkgs.bash}/bin/bash "/home/thomas/.local/bin/weather-update.sh"
-  '';
-  serviceConfig = {
-    Type = "oneshot";
-    User = "thomas";
-  };
-};
-```
-
-The updater writes to `$HOME/.cache/weather_cache.file`. The panel does not talk
-to the network or watch the file: `weather_event` simply reads the cache on the
-10-second poll loop (a cheap `cat`, no `curl`). The hourly timer keeps the file
-fresh independently of the X session.
-
-This keeps the fetch (network, runs as a system unit) cleanly separated from the
-display (reads a local file, runs in the panel). Note that because the timer is
-a system unit it has no access to the X session, so a herbstclient hook from the
-service would not work here; the poll-from-cache approach sidesteps that
-entirely. Make sure the cache path in `lib/weather.sh` matches the path the
-updater script writes to.
-
-### 4. Bluetooth module (new)
-
-New `lib/bluetooth.sh` plus `lib/bt_menu.sh`. Panel display: always `BLT:`.
+`lib/bluetooth.sh` plus `lib/bt_menu.sh`. Panel display: always `BLT:`.
 
 - **Left-click**: toggles the adapter on/off (`bluetoothctl power on|off`).
-  Off is dimmed (`color_fg_dim`), on is shown in `color_fg`; the first connected
-  device appears after `BLT:`.
-- **Middle-click** (only when the adapter is on): opens a rofi menu.
+  Off is dimmed; on is shown in `color_fg`, with the first connected device
+  shown after `BLT:`.
+- **Middle-click** (only when on): opens a rofi menu (see below).
 
-The listener uses a trick: `bluetoothctl` without a subcommand stays in
-interactive mode and prints `[CHG]` lines, but exits immediately when stdin is
-closed. stdin is therefore kept open via `{ echo; sleep infinity; }`:
+The listener keeps `bluetoothctl` in interactive mode so it prints `[CHG]`
+lines, and keeps stdin open so it does not exit early:
 
 ```bash
 { echo; sleep infinity; } | stdbuf -oL bluetoothctl 2>/dev/null \
@@ -120,30 +75,25 @@ closed. stdin is therefore kept open via `{ echo; sleep infinity; }`:
     | while read -r _ ; do bt_event ; done > >(uniq_linebuffered) &
 ```
 
-### 5. rofi menu for bluetooth (`lib/bt_menu.sh`)
+### rofi menu for bluetooth (`lib/bt_menu.sh`)
 
-- **Enter / left-click** on a device: toggle the connection (connect if off,
-  disconnect if on).
+- **Enter / left-click** on a device: toggle the connection.
 - **Alt+p**: pair the highlighted entry, without an automatic connect.
   (rofi does not distinguish mouse buttons as separate actions, so this uses a
-  key binding via `kb-custom-1` instead of a right-click.)
+  key binding via `kb-custom-1`.)
 
-Devices carry a small, dimmed status tag: `connected`, `disconnected`, `paired`,
-`unpaired`. The MAC is carried as a hidden first field (`-display-columns 2`)
-and read back when the selection is evaluated.
+Devices carry a small, dimmed status tag (`connected`, `disconnected`,
+`unpaired`). The MAC is carried as a hidden first column (`-display-columns 2`).
+The menu opens instantly with known devices and kicks off the scan in the
+background; freshly scanned devices appear on the next open. After any action it
+emits `bt_refresh` so the panel updates.
 
-The menu opens **instantly** with the known devices and kicks off the scan in
-the background (non-blocking). A lock and timestamp file prevents a new scan
-from starting on every open (`SCAN_COOLDOWN`). Freshly scanned devices appear on
-the next open. After any action the `bt_refresh` hook is emitted so the panel
-field updates.
+### Volume
 
-### 6. Volume: hooks plus pw-mon listener
-
-Instant updates on keybinds and panel clicks still go through the
-`volume_refresh` hook. In addition, a `pw-mon` listener catches changes that do
-not go through the keybinds, in particular the volume buttons on the bluetooth
-headset (AVRCP) and the default-sink switch on connect:
+Instant updates on keybinds and panel clicks go through the `volume_refresh`
+hook. A `pw-mon` listener additionally catches changes that bypass the keybinds:
+the volume buttons on the bluetooth headset (AVRCP) and the default-sink switch
+on connect.
 
 ```bash
 stdbuf -oL pw-mon 2>/dev/null \
@@ -151,18 +101,113 @@ stdbuf -oL pw-mon 2>/dev/null \
     | while read -r _ ; do volume_event ; done > >(uniq_linebuffered) &
 ```
 
-`pw-mon` also fires on track changes; the resulting unchanged `vol` line is
-discarded by `uniq_linebuffered`.
+`pw-mon` also fires on track changes; the unchanged `vol` line is dropped by
+`uniq_linebuffered`.
+
+### Battery
+
+Moved from a 10-second poll to an event listener once upower was installed and
+its service enabled. `upower --monitor` is used purely as a bell: on any
+notification, `battery_event` re-reads the actual values from sysfs (the
+existing `lib/bat.sh` logic is unchanged; upower is only the trigger). The
+listener filters to the battery device so unrelated events (AC, USB-C ports,
+a wireless mouse battery) do not fire it:
+
+```bash
+stdbuf -oL upower --monitor 2>/dev/null \
+    | grep --line-buffered 'battery_BAT0' \
+    | while read -r _ ; do battery_event ; done > >(uniq_linebuffered) &
+```
+
+Note: `upower --monitor-detail` always prints the full device block (including
+`percentage:` and `state:`) on every event, even on irrelevant voltage jitter,
+so filtering those fields does not actually reduce triggers. Filtering on the
+device with the lean `--monitor` is the effective approach; `uniq_linebuffered`
+plus the sysfs re-read absorb the rest. Battery detection lives in `lib/bat.sh`
+and auto-detects the first `/sys/class/power_supply/BAT*` (override via
+`BATTERY=BAT1`).
+
+### Weather
+
+The data comes from a cache file that a systemd timer fills hourly. The fetch
+service is a **system** unit (it only needs the network, not the X session):
+
+```nix
+systemd.timers."get-weather" = {
+  wantedBy = [ "timers.target" ];
+  timerConfig = {
+    OnCalendar = "hourly";
+    OnBootSec = "2min";        # also refresh shortly after every boot
+    Persistent = true;
+    Unit = "get-weather.service";
+  };
+};
+systemd.services."get-weather" = {
+  path = [ pkgs.curl ];
+  script = ''${pkgs.bash}/bin/bash "/home/thomas/.local/bin/weather-update.sh"'';
+  serviceConfig = { Type = "oneshot"; User = "thomas"; };
+};
+```
+
+`OnBootSec` matters: `Persistent` only replays a run if a full interval was
+missed, so booting shortly after a run would otherwise leave a stale cache until
+the next hour. `OnBootSec` refreshes a couple of minutes after every boot.
+
+Because the fetch service runs in the system scope it has no access to the X
+session, so it cannot emit a herbstclient hook directly. Instead a **user** path
+unit watches the cache file and emits the hook, which has session access:
+
+```nix
+systemd.user.paths."weather-watch" = {
+  wantedBy = [ "default.target" ];
+  pathConfig = {
+    PathChanged = "/home/thomas/.cache/weather_cache.file";
+    Unit = "weather-watch.service";
+  };
+};
+systemd.user.services."weather-watch" = {
+  serviceConfig = {
+    Type = "oneshot";
+    # absolute store path: the user systemd PATH does not include herbstclient
+    ExecStart = "-${pkgs.herbstluftwm}/bin/herbstclient emit_hook weather_refresh";
+  };
+};
+```
+
+The panel handles `weather_refresh` by re-reading the cache via `weather_read`.
+The chain is: system timer -> fetch service writes cache -> user path unit sees
+the change -> emits `weather_refresh` -> panel re-reads. The updater writes the
+file directly (`printf ... > "$cache"`), which triggers `PathChanged`. If you
+ever switch to atomic writes (temp file plus `mv`), use `PathModified` or watch
+the directory instead.
 
 ## Play/pause on the headset
 
-The play/pause button on the headset sends AVRCP, which BlueZ forwards over
-MPRIS, the same interface `playerctl` listens on. In most setups this works
-without any action. If it does not, the AVRCP-to-MPRIS bridge is missing:
+The headset's play/pause button sends AVRCP, which BlueZ forwards over MPRIS,
+the interface `playerctl` listens on. If it does not work out of the box, enable
+the AVRCP-to-MPRIS bridge:
 
 ```bash
 systemctl --user enable --now mpris-proxy
 ```
+
+## Network block (work in progress)
+
+`lib/network.sh` is an early draft and not yet wired into the panel. It uses
+`nmcli` to report the active wifi/ethernet interface, its IPv4 address, and
+connectivity. Current caveats before it can be sourced like the other libs:
+
+- It is written as a standalone script (calls `main` at the end) rather than a
+  sourceable library. The top-level `exit 127` on missing `nmcli` would
+  terminate the whole panel if sourced; this needs to become a guard inside a
+  function that returns instead of exits.
+- Its output format (`name:.. ip:.. active:.. connected:..`) differs from the
+  `<event>\t<data>` protocol the other sources use; it needs an event name
+  prefix and a data-handling case to integrate.
+
+In other words: the data-gathering logic is taking shape, but the integration
+(protocol, sourcing safety, a `*_format` step, an event source in the generator)
+is still open.
 
 ## Requirements
 
@@ -170,28 +215,36 @@ systemctl --user enable --now mpris-proxy
 - `wpctl` / WirePlumber and `pw-mon` (PipeWire) for volume
 - `playerctl` for media
 - `brightnessctl` for brightness
+- `upower` (service enabled) for battery events
 - `bluetoothctl` (BlueZ) and `rofi` for bluetooth
+- `nmcli` (NetworkManager) for the upcoming network block
 - a dzen2 `textwidth` tool (`textwidth`, `dzen2-textwidth`, or `xftwidth`)
 
 ## Known gotchas
 
 - **Right-click in the panel**: dzen2 binds `button3` to `exit` by default in
-  title-only mode. The bluetooth menu is therefore on the middle-click.
+  title-only mode, so the bluetooth menu is on the middle-click.
 - **First menu open after login**: shows only known devices, because the
-  background scan is just starting. Simply reopen it shortly after.
-- **Weather cache path**: the path read in `lib/weather.sh` must match the path
-  the updater script writes to (`$HOME/.cache/weather_cache.file`). If the
-  weather field stays empty, check that the file exists and is populated.
+  background scan is just starting. Reopen it shortly after.
+- **Weather hook needs DISPLAY**: the user path/service can only reach
+  herbstclient if the session environment was imported. Early in the autostart:
+  `systemctl --user import-environment DISPLAY XAUTHORITY`. Check with
+  `systemctl --user show-environment | grep DISPLAY`.
+- **herbstclient path in user units**: the user systemd PATH does not include
+  herbstclient, so reference the absolute store path in `ExecStart`, not a bare
+  command.
 
 ## Files
 
 ```
-panel.sh            Main script: event generator, data handling, dzen2 call
-lib/volume.sh       Volume: event/read/format
-lib/bat.sh          Battery: event/status
-lib/brightness.sh   Brightness: read/event/format
-lib/media.sh        Media: event/format (event unused since --follow)
-lib/weather.sh      Weather: event/format (reads cache file)
-lib/bluetooth.sh    Bluetooth: read/event/format
-lib/bt_menu.sh      rofi menu for bluetooth devices
+panel.sh                 Main script: sources libs, runs generator + data handling, calls dzen2
+lib/event_generator.sh   The event_generator function (listeners + clock loop)
+lib/volume.sh            Volume: event/read/format
+lib/bat.sh               Battery: detection + event/status
+lib/brightness.sh        Brightness: read/event/format
+lib/media.sh             Media: event/format (event unused since --follow)
+lib/weather.sh           Weather: event/read/format (read used by the refresh hook)
+lib/bluetooth.sh         Bluetooth: read/event/format
+lib/bt_menu.sh           rofi menu for bluetooth devices
+lib/network.sh           Network block (work in progress, not yet integrated)
 ```
