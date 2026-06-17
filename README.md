@@ -5,14 +5,14 @@ Further I'll have always a nice backup of my Neovim configs here.
 
 ## Todo
 
-[ ] dzen panel network block (WIP)
+[_] dzen panel network block (WIP)
     
-    [ ] Use nmtui or build own rofi menu
+[_] Use nmtui or build own rofi menu
 
-[ ] Put responsibilities into separate libs
+[_] Put responsibilities into separate libs
 
-[ ] Show only locally played music (maybe mpd)
+[_] Show only locally played music (maybe mpd)
 
-[ ] 
+[_] 
 
 
