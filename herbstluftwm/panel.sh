@@ -8,6 +8,7 @@ source "$script_dir/lib/media.sh"
 source "$script_dir/lib/weather.sh"
 source "$script_dir/lib/bluetooth.sh"
 source "$script_dir/lib/event_generator.sh"
+source "$script_dir/lib/utils.sh" # Find correct sleep for any distribution. Panel debug function panel_selfcheck
 
 # variables
 # Tokyo Night theme colors
@@ -32,11 +33,7 @@ quote() {
 	printf '%s' "${q% }"
 }
 
-if [[ -f /usr/lib/bash/sleep ]]; then
-    # load and enable 'sleep' builtin (does not support unit suffixes: h, m, s!)
-    # requires pkg 'bash-builtins' on debian; included in 'bash' on arch.
-    enable -f /usr/lib/bash/sleep sleep
-fi
+enable_sleep_builtin # Call in runtime_checks.sh, to make shure we find sleep on (maybe any?) distribution.
 
 hc_quoted="$(quote "${herbstclient_command[@]:-herbstclient}")"
 hc() { "${herbstclient_command[@]:-herbstclient}" "$@" ;}
@@ -51,6 +48,7 @@ x=${geometry[0]}
 y=${geometry[1]}
 panel_width=${geometry[2]}
 panel_height=40
+
 font="-adobe-helvetica-medium-r-normal--20-140-100-100-p-100-iso10646-1"
 #font="-misc-fixed-medium-r-normal--15-140-75-75-c-90-iso10646-1"
 #font="-*-fixed-medium-*-*-*-16-*-*-*-*-*-*-*"
@@ -58,8 +56,6 @@ font="-adobe-helvetica-medium-r-normal--20-140-100-100-p-100-iso10646-1"
 bgcolor=$(hc get frame_border_normal_color|sed 's,^\(\#[0-9a-f]\{6\}\)[0-9a-f]\{2\}$,\1,')
 selbg=$(hc get window_border_active_color|sed 's,^\(\#[0-9a-f]\{6\}\)[0-9a-f]\{2\}$,\1,')
 selfg='#101010'
-
-####
 
 # Try to find textwidth binary.
 # In e.g. Ubuntu, this is named dzen2-textwidth.
@@ -101,6 +97,10 @@ else
 fi
 
 hc pad $monitor $panel_height
+
+#### This only runs with PANEL_DEBUG=1, if the panel is not working as expected.
+[ -n "$PANEL_DEBUG" ] && panel_selfcheck
+####
 
 {
     ### Event generator ###

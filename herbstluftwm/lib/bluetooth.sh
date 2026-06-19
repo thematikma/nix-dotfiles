@@ -17,6 +17,15 @@
 # device (bt_dev, may be empty). Only sets variables, prints nothing
 
 bt_read() {
+    # No adapter present (e.g. a desktop without bluetooth): bail out fast.
+    # Without this, 'bluetoothctl show' can block and stall the whole
+    # event generator, since bt_event runs as an initial call.
+    if ! bluetoothctl list 2>/dev/null | grep -q .; then
+        bt_power=""
+        bt_dev=""
+        return 1
+    fi
+
     if bluetoothctl show 2>/dev/null | grep -q "Powered: yes"; then
         bt_power="on"
     else
@@ -33,7 +42,7 @@ bt_read() {
 
 # Event line for the generator: blt <power> <device-name...>
 bt_event() {
-    bt_read
+    bt_read || return
     printf 'blt\t%s\t%s\n' "$bt_power" "$bt_dev"
 }
 

@@ -2,6 +2,12 @@
 
 # this is a simple config for herbstluftwm
 
+# Source external snippets
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$script_dir/lib/utils.sh" # Detect, if picom is running otherwise. If not, start it in backroud with start_picom
+start_picom
+
+
 # variables
 # Tokyo Night theme colors
 color_bg="#1a1b26"
@@ -163,7 +169,7 @@ hc set frame_gap 4
 
 hc attr theme.title_height 15
 hc attr theme.title_when always
-herbstclient attr theme.title_font '-adobe-helvetica-medium-r-normal--14-100-100-100-p-76-iso8859-1'
+herbstclient attr theme.title_font 'DejaVu Sans:pixelsize=14'; echo "exit=$?"
 hc attr theme.title_depth 3
 hc attr theme.active.color "${color_fg}"
 hc attr theme.title_color "$color_fg_dim"
@@ -214,9 +220,8 @@ hc set tree_style '╾│ ├└╼─┐'
 
 # unlock, just to be sure
 hc unlock
-
 # Set monitor layout before hc will auto-detect monitors. The systemd service of autorandr will only trigger after sleep and on plugging.
-autorandr --change
+# autorandr --change
 hc detect_monitors
 
 # do multi monitor setup here, e.g.:
@@ -233,4 +238,4 @@ for monitor in $(hc list_monitors | cut -d: -f1) ; do
 done
 
 # set wallpaper
-feh --bg-scale /home/thomas/Bilder/walls/landscapes/vally.jpg
+feh --bg-scale /home/thomas/walls/new_jersy_beach.jpg

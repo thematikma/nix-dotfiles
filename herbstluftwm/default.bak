@@ -23,7 +23,7 @@ event_generator() {
     # Initial values at login. Each guarded/non-blocking so a missing tool or
     # absent hardware cannot stall the path to `hc --idle` below.
     command -v wpctl        >/dev/null 2>&1 && volume_event
-    brightness_event   # self-guards: emits nothing unless a backlight exists
+    command -v brightnessctl >/dev/null 2>&1 && brightness_event
     battery_event            # bat.sh already returns early when no BAT* exists
     weather_event            # just cats a cache file; safe if absent
     command -v bluetoothctl >/dev/null 2>&1 && bt_event   # bt_read bails if no adapter
